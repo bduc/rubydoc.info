@@ -25,7 +25,7 @@ unless RVM_PATH
   exit
 end
 
-puts "Using RVM_PATH #{RVM_PATH}"
+log.info "Using RVM_PATH #{RVM_PATH}"
 
 class Hash; alias blank? empty? end
 class NilClass; def blank?; true end end

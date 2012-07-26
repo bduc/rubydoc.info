@@ -64,9 +64,11 @@ module YARD
 
         # Generate
         Thread.new do
-          `cd #{source_path} &&
+          cmd = "cd #{source_path} &&
           #{YARD::ROOT}/../bin/yardoc -b #{yfile} -n -q --safe &&
-          touch .yardoc/complete`
+          touch #{File.join(yfile, 'complete')}"
+          log.debug "YARDOC shell '#{cmd}'"
+          `#{cmd}`
           self.yardoc_file = yfile
         end
         raise LibraryNotPreparedError
@@ -124,9 +126,11 @@ module YARD
       private
 
       def generate_yardoc
-        `cd #{source_path} &&
+        cmd = "cd #{source_path} &&
           #{YARD::ROOT}/../bin/yardoc -n -q --safe &&
-          touch .yardoc/complete`
+          touch .yardoc/complete"
+        log.debug "YARDOC shell '#{cmd}'"
+        `#{cmd}`
       end
 
       def expand_gem(io)
