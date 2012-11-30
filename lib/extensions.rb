@@ -51,8 +51,8 @@ module YARD
         raise LibraryNotPreparedError
       end
 
-      def load_yardoc_from_local_rvm_gem
-        yfile = File.join(::LOCAL_RVM_GEMS_PATH, name, version, '.yardoc')
+      def load_yardoc_from_local_gem
+        yfile = File.join(::LOCAL_GEMS_PATH, name, version, '.yardoc')
         if File.directory?(yfile)
           if File.exist?(File.join(yfile, 'complete'))
             self.yardoc_file = yfile
@@ -105,8 +105,8 @@ module YARD
         raise LibraryNotPreparedError
       end
 
-      def source_path_for_local_rvm_gem
-        ::DocServer.local_rvm_gems_index[name][version]
+      def source_path_for_local_gem
+        ::DocServer.local_gems_index[name][version]
       end
 
       def source_path_for_remote_gem

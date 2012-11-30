@@ -8,7 +8,7 @@
     });
   }
 
-  $(function() { saveIndex('local_rvm_gems'); });
+  $(function() { saveIndex('local_gems'); });
   $(fixGemLinks);
 </script>
 
@@ -16,18 +16,18 @@
   <ul id="nav">
     <li><a href="/featured">Featured</a></li>
     <li><a href="/stdlib">Stdlib</a></li>
-    <li class="selected">RVM Gems</li>
+    <li class="selected">Local Gems</li>
     <li><a href="/gems">RubyGems</a></li>
     <li><a href="/github">Github</a></li>
-    <li class="search"><form action="/find/local_rvm_gems" method="GET"><input type="text" id="docSearch" name="q" value="<%= h @search || 'Search Gems' %>"/></form></li>
+    <li class="search"><form action="/find/local_gems" method="GET"><input type="text" id="docSearch" name="q" value="<%= h @search || 'Search Gems' %>"/></form></li>
   </ul>
-  <h2>RVM Gems <%= h @search ? 'Search Results' : 'Listing' %> <small>(<a class="framelink" href="#">links without frames</a>)</small></h2>
+  <h2>Local Gems <%= h @search ? 'Search Results' : 'Listing' %> <small>(<a class="framelink" href="#">links without frames</a>)</small></h2>
   <ul class="alpha_index">
     <% (?a..?z).each do |letter| %>
       <% if letter == @letter %>
         <li class="selected"><%= letter.upcase %></li>
       <% else %>
-        <li><a href="/local_rvm_gems/<%= letter %>"><%= letter.upcase %></a></li>
+        <li><a href="/local_gems/<%= letter %>"><%= letter.upcase %></a></li>
       <% end %>
     <% end %>
   </ul>

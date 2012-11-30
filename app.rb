@@ -11,24 +11,35 @@ require 'extensions'
 require 'scm_router'
 require 'scm_checkout'
 require 'gems_router'
-require 'local_rvm_gems_router'
+require 'local_gems_router'
 require 'featured_router'
 require 'stdlib_router'
 require 'recent_store'
 
-[File.expand_path("~/.rvm"),"/usr/local/rvm"].each do |path|
-  RVM_PATH= path if Dir.exists?(path)
-end
-
-unless RVM_PATH
-  puts "Unable to determine RVM_PATH"
-  exit
-end
-
-log.info "Using RVM_PATH #{RVM_PATH}"
-
 class Hash; alias blank? empty? end
 class NilClass; def blank?; true end end
+
+$rvm_path=nil
+[File.expand_path("~/.rvm"),"/usr/local/rvm"].each do |path|
+  $rvm_path= path if Dir.exists?(path)
+end
+
+if ! $rvm_path.blank?
+  log.info "Using RVM at '#{$rvm_path}'"
+else
+  log.info "No RVM found."
+end
+
+$rbenv_path=nil
+[File.expand_path("~/.rbenv"),"/usr/local/rbenv"].each do |path|
+  $rbenv_path= path if Dir.exists?(path)
+end
+
+if ! $rbenv_path.blank?
+  log.info "Using rbenv at '#{$rbenv_path}'"
+else
+  log.info "No rbenv found."
+end
 
 class DocServer < Sinatra::Base
   include YARD::Server
@@ -47,53 +58,64 @@ class DocServer < Sinatra::Base
     }
   end
 
-  @@local_rvm_gems_index = nil
-  def self.local_rvm_gems_index
-    unless @@local_rvm_gems_index
+  @@local_gems_index = nil
+  def self.local_gems_index
+    unless @@local_gems_index
+      @@local_gems_index= {}
 
-=begin
-      # Too slow for what we need right now
-      $: << '/usr/local/rvm/lib'
-      require 'rvm'
+      if $rvm_path
+        # very fast but more brittle when rvm changes plans on gemsets and storage and paths
+        gem_paths=Dir.glob(File.join($rvm_path,"gems/*"))
 
-      gem_paths=[]
-      RVM.list.gemsets.each do |gemset_name|
-        # this is the slow part -> it shell's out for every gemset_name
-        env= RVM.info(gemset_name)
-        gem_paths.concat env[gemset_name]['environment']['GEM_PATH'].split(':')
+        gem_paths.each do |gem_path|
+
+          local_gems=[]
+
+          # copied from Gem::Specification._all
+          # because of Bundler magic; we can't use
+          # Gem::Specification.dirs= [gem_path]; Gem::Specification,all
+          # *all* will always refer to you Bundler Gemfile
+
+          Dir[File.join(gem_path,'specifications', "*.gemspec")].each { |path|
+            spec = Gem::Specification.load path.untaint
+            # #load returns nil if the spec is bad, so we just ignore
+            # it at this stage
+            local_gems << spec if spec
+          }
+
+          local_gems.each do |spec|
+            @@local_gems_index[spec.name]||={}
+            @@local_gems_index[spec.name][spec.version.to_s] = File.join(gem_path,"gems","#{spec.name}-#{spec.version.to_s}")
+          end
+        end
+
       end
 
-      gem_paths.uniq!
-=end
-      # very fast but more brittle when rvm changes plans on gemsets and storage and paths
-      gem_paths=Dir.glob(File.join(RVM_PATH,"gems/*"))
+      if $rbenv_path
+        # very fast but more brittle when rbenv changes plans on gem storage and paths
+        rubies = Dir.glob(File.join($rbenv_path,"versions/*"))
 
-      @@local_rvm_gems_index= {}
+        rubies.each do |ruby_path|
+          puts "rbenv #{ruby_path}"
+          gem_path = Dir.glob(File.join(ruby_path,'lib/ruby/gems/*')).first
 
-      gem_paths.each do |gem_path|
+          local_gems=[]
 
-        local_gems=[]
+          Dir[File.join(gem_path,'specifications', "*.gemspec")].each { |path|
+            spec = Gem::Specification.load path.untaint
+            local_gems << spec if spec
+          }
 
-        # copied from Gem::Specification._all
-        # because of Bundler magic; we can't use
-        # Gem::Specification.dirs= [gem_path]; Gem::Specification,all
-        # *all* will always refer to you Bundler Gemfile
-
-        Dir[File.join(gem_path,'specifications', "*.gemspec")].each { |path|
-          spec = Gem::Specification.load path.untaint
-          # #load returns nil if the spec is bad, so we just ignore
-          # it at this stage
-          local_gems << spec if spec
-        }
-
-        local_gems.each do |spec|
-          @@local_rvm_gems_index[spec.name]||={}
-          @@local_rvm_gems_index[spec.name][spec.version.to_s] = File.join(gem_path,"gems","#{spec.name}-#{spec.version.to_s}")
+          local_gems.each do |spec|
+            @@local_gems_index[spec.name]||={}
+            @@local_gems_index[spec.name][spec.version.to_s] = File.join(gem_path,"gems","#{spec.name}-#{spec.version.to_s}")
+          end
         end
+
       end
 
     end
-    @@local_rvm_gems_index
+    @@local_gems_index
   end
 
   def self.load_configuration
@@ -146,21 +168,21 @@ class DocServer < Sinatra::Base
     log.error "No remote_gems file to load remote gems from, not serving gems."
   end
 
-  def self.load_local_rvm_gems_adapter
-    puts ">> Loading local rvm gems list..."
+  def self.load_local_gems_adapter
+    puts ">> Loading local gems list..."
 
     opts = adapter_options
 
-    self.local_rvm_gems_index.each do |key, value|
+    self.local_gems_index.each do |key, value|
       opts[:libraries][key] = value.map do |version, gem_src_dir|
-        LibraryVersion.new(key, version, nil, :local_rvm_gem)
+        LibraryVersion.new(key, version, nil, :local_gem)
       end
     end
 
-    opts[:options][:router] = LocalRvmGemsRouter
-    set :local_rvm_gems_adapter, RackAdapter.new(*opts.values)
+    opts[:options][:router] = LocalGemsRouter
+    set :local_gems_adapter, RackAdapter.new(*opts.values)
   rescue Errno::ENOENT
-    log.error "No rvm_gems file to load local gems from, not serving local gems."
+    log.error "No gems file to load local gems from, not serving local gems."
   end
 
   def self.load_scm_adapter
@@ -207,18 +229,29 @@ class DocServer < Sinatra::Base
     end
 
     require 'stdlib_installer'
-
-    src_paths=Dir.glob(File.join(RVM_PATH,"**/ruby.c"))
-    src_paths.each do |src_path|
-      src_dir = File.dirname(src_path)
-      version = File.basename(src_dir)
-      version = File.basename(File.dirname(src_dir)) if version !~ /[0-9]/
-
-      unless File.directory?(File.join(STDLIB_PATH,version))
-        log.warn "Installing stdlib #{version}"
-        StdlibInstaller.new(src_dir, version).install
+    if $rvm_path
+      src_paths=Dir.glob(File.join($rvm_path,"**/ruby.c"))
+      src_paths.each do |src_path|
+        src_dir = File.dirname(src_path)
+        version = File.basename(src_dir)
+        version = File.basename(File.dirname(src_dir)) if version !~ /[0-9]/
+        unless File.directory?(File.join(STDLIB_PATH,version))
+          log.warn "Installing RVM stdlib #{version}"
+          StdlibInstaller.new(src_dir, version).install
+        end
       end
-
+    end
+    if $rbenv_path
+      src_paths=Dir.glob(File.join($rbenv_path,"sources/**/ruby.c"))
+      src_paths.each do |src_path|
+        src_dir = File.dirname(src_path)
+        version = File.basename(src_dir)
+        version = File.basename(File.dirname(src_dir)) if version !~ /[0-9]/
+        unless File.directory?(File.join(STDLIB_PATH,version))
+          log.warn "Installing RBENV stdlib #{version}"
+          StdlibInstaller.new(src_dir, version).install
+        end
+      end
     end
 
     opts = adapter_options
@@ -273,7 +306,7 @@ class DocServer < Sinatra::Base
   configure do
     load_configuration
     load_gems_adapter
-    load_local_rvm_gems_adapter
+    load_local_gems_adapter
     load_scm_adapter
     load_featured_adapter
     load_stdlib_adapter
@@ -408,11 +441,11 @@ class DocServer < Sinatra::Base
     cache erb(:gems_index)
   end
 
-  get %r{^/local_rvm_gems(?:/([a-z])?)?$} do |letter|
+  get %r{^/local_gems(?:/([a-z])?)?$} do |letter|
     @letter = letter || 'a'
-    @adapter = settings.local_rvm_gems_adapter
+    @adapter = settings.local_gems_adapter
     @libraries = @adapter.libraries.find_all {|k, v| k[0].downcase == @letter }
-    cache erb(:local_rvm_gems_index)
+    cache erb(:local_gems_index)
   end
 
   get %r{^/(?:(?:search|list)/)?github/([^/]+)/([^/]+)} do |username, project|
@@ -438,14 +471,14 @@ class DocServer < Sinatra::Base
     result
   end
 
-  get %r{^/(?:(?:search|list)/)?local_rvm_gems/([^/]+)} do |gemname|
+  get %r{^/(?:(?:search|list)/)?local_gems/([^/]+)} do |gemname|
     return status(503) && "Cannot parse this gem" if DISALLOWED_GEMS.include?(gemname)
     if WHITELISTED_GEMS.include?(gemname)
       puts "Dropping safe mode for #{gemname}"
       YARD::Config.options[:safe_mode] = false
     end
     @gemname = gemname
-    result = settings.local_rvm_gems_adapter.call(env)
+    result = settings.local_gems_adapter.call(env)
     return status(404) && erb(:gems_404) if result.first == 404
     result
   end
@@ -500,12 +533,12 @@ class DocServer < Sinatra::Base
     erb(:gems_index)
   end
 
-  get %r{^/find/local_rvm_gems} do
-    self.class.load_local_rvm_gems_adapter unless defined? settings.local_rvm_gems_adapter
+  get %r{^/find/local_gems} do
+    self.class.load_local_gems_adapter unless defined? settings.local_gems_adapter
     @search = params[:q]
-    @adapter = settings.local_rvm_gems_adapter
+    @adapter = settings.local_gems_adapter
     @libraries = @adapter.libraries.find_all {|k,v| k.match(/#{Regexp.quote @search}/) }
-    erb(:local_rvm_gems_index)
+    erb(:local_gems_index)
   end
 
   # Redirect /docs/ruby-core
