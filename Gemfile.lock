@@ -46,7 +46,7 @@ GEM
       kgio (~> 2.6)
       rack
       raindrops (~> 0.7)
-    yard (0.8.2.1)
+    yard (0.8.3)
     yard-kramdown (0.0.1)
     yard-rails (0.2.0)
       yard
@@ -74,7 +74,7 @@ DEPENDENCIES
   sqlite3
   syntax
   unicorn
-  yard
+  yard (= 0.8.3)
   yard-kramdown
   yard-rails
   yard-sd

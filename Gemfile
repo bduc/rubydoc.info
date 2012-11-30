@@ -1,6 +1,6 @@
 source :rubygems
 
-gem 'sinatra', '>= 1.3'
+gem 'sinatra',   '>= 1.3'
 gem 'activesupport'
 gem 'airbrake'
 gem 'maruku'
@@ -15,8 +15,7 @@ gem 'sequel'
 gem 'syntax'
 gem 'json'
 gem 'rake'
-#gem 'yard', :path => '../yard'
-gem 'yard'
+gem 'yard',     '= 0.8.3'
 gem 'yard-rails'
 gem 'yard-kramdown'
 gem 'yard-sd'

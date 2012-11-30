@@ -96,7 +96,6 @@ class DocServer < Sinatra::Base
         rubies = Dir.glob(File.join($rbenv_path,"versions/*"))
 
         rubies.each do |ruby_path|
-          puts "rbenv #{ruby_path}"
           gem_path = Dir.glob(File.join(ruby_path,'lib/ruby/gems/*')).first
 
           local_gems=[]
